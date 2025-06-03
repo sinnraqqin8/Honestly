@@ -1,0 +1,111 @@
+local Rayfield=loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+local cam=workspace.CurrentCamera
+local plr=Players.LocalPlayer
+local keyCorrect="Diddy123"
+local keyOk=false
+local aimOn=false
+local espOn=false
+local tgt=nil
+local aimKey=Enum.KeyCode.E
+local aimSpeed=10
+
+local Win=Rayfield:CreateWindow({Name="Diddy Script",LoadingTitle="Loading...",LoadingSubtitle="by ChatGPT",ConfigurationSaving={Enabled=false}})
+local Tab=Win:CreateTab("Main")
+
+local KeyInput=Tab:CreateInput({Name="Enter Key",PlaceholderText="Type your key here"})
+local SubmitBtn=Tab:CreateButton({Name="Submit Key",Callback=function()
+    if KeyInput:GetValue()==keyCorrect then
+        keyOk=true
+        Rayfield:Notify({Title="Success",Content="Key accepted! Features unlocked.",Duration=3})
+        AimToggle:SetDisabled(false)
+        EspToggle:SetDisabled(false)
+        SubmitBtn:SetDisabled(true)
+        KeyInput:SetDisabled(true)
+    else
+        Rayfield:Notify({Title="Error",Content="Incorrect key, try again.",Duration=3})
+    end
+end})
+
+local AimToggle=Tab:CreateToggle({Name="Aimlock Toggle (Press E)",CurrentValue=false,Disabled=true,Callback=function(v) aimOn=v if v then tgt=findNearest() else tgt=nil end end})
+local EspToggle=Tab:CreateToggle({Name="ESP Toggle",CurrentValue=false,Disabled=true,Callback=function(v) espOn=v if v then enableESP() else disableESP() end end})
+
+function findNearest()
+    local nearest=nil
+    local dist=math.huge
+    local mousePos=UserInputService:GetMouseLocation()
+    for _,o in pairs(Players:GetPlayers())do
+        if o~=plr and o.Character and o.Character:FindFirstChild("HumanoidRootPart")then
+            local pos=o.Character.HumanoidRootPart.Position
+            local screenPos,onScreen=cam:WorldToViewportPoint(pos)
+            if onScreen then
+                local d=(Vector2.new(screenPos.X,screenPos.Y)-Vector2.new(mousePos.X,mousePos.Y)).Magnitude
+                if d<dist then dist=d nearest=o.Character.HumanoidRootPart end
+            end
+        end
+    end
+    return nearest
+end
+
+function smoothLook(pos,dt)
+    local c=cam.CFrame
+    local dir=(pos-c.Position).Unit
+    cam.CFrame=c:Lerp(CFrame.new(c.Position,c.Position+dir),aimSpeed*dt)
+end
+
+local espBoxes={}
+function enableESP()
+    for _,o in pairs(Players:GetPlayers())do
+        if o~=plr and o.Character and o.Character:FindFirstChild("HumanoidRootPart")then
+            if not espBoxes[o] then
+                local box=Drawing.new("Square")
+                box.Color=Color3.fromRGB(255,0,0)
+                box.Thickness=2
+                box.Transparency=1
+                box.Filled=false
+                espBoxes[o]=box
+            end
+        end
+    end
+end
+function disableESP()
+    for _,box in pairs(espBoxes)do box:Remove() end
+    espBoxes={}
+end
+
+RunService.RenderStepped:Connect(function()
+    if not espOn then return end
+    for plr,box in pairs(espBoxes)do
+        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")then
+            local pos,onScreen=cam:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
+            if onScreen then
+                local size=30
+                box.Position=Vector2.new(pos.X-size/2,pos.Y-size/2)
+                box.Size=Vector2.new(size,size)
+                box.Visible=true
+            else
+                box.Visible=false
+            end
+        else
+            box.Visible=false
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input,gp)
+    if keyOk and not gp and input.KeyCode==aimKey then
+        aimOn=not aimOn
+        AimToggle:SetValue(aimOn)
+        if aimOn then tgt=findNearest() else tgt=nil end
+    end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+    if keyOk and aimOn and tgt and tgt.Parent then
+        smoothLook(tgt.Position,dt)
+    else
+        tgt=nil
+    end
+end)
